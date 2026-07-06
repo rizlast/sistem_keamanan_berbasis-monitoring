@@ -1,0 +1,673 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+  <title>🛡️ Security Monitor Pro</title>
+  <script type="importmap">
+    {
+      "imports": {
+        "firebase/app": "https://www.gstatic.com/firebasejs/11.6.0/firebase-app.js",
+        "firebase/database": "https://www.gstatic.com/firebasejs/11.6.0/firebase-database.js"
+      }
+    }
+  </script>
+  <style>
+    /* ===== CSS (sama seperti sebelumnya, tidak diubah) ===== */
+    :root {
+      --bg-primary: #0a0e1a;
+      --bg-secondary: #111827;
+      --bg-card: rgba(255,255,255,0.04);
+      --border-color: rgba(255,255,255,0.06);
+      --text-primary: #f1f5f9;
+      --text-secondary: #94a3b8;
+      --text-muted: #64748b;
+      --accent-blue: #3b82f6;
+      --accent-green: #22c55e;
+      --accent-red: #ef4444;
+      --accent-yellow: #eab308;
+      --accent-purple: #8b5cf6;
+      --radius: 20px;
+      --transition: all 0.3s cubic-bezier(0.4,0,0.2,1);
+    }
+    * { margin:0; padding:0; box-sizing:border-box; }
+    body {
+      font-family: 'Inter', 'Segoe UI', system-ui, sans-serif;
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      min-height: 100vh;
+      padding: 20px;
+      background-image: radial-gradient(ellipse at 10% 20%, rgba(59,130,246,0.05) 0%, transparent 60%),
+                        radial-gradient(ellipse at 90% 80%, rgba(139,92,246,0.05) 0%, transparent 60%);
+    }
+    ::-webkit-scrollbar { width:6px; height:6px; }
+    ::-webkit-scrollbar-track { background:var(--bg-secondary); border-radius:10px; }
+    ::-webkit-scrollbar-thumb { background:var(--accent-blue); border-radius:10px; }
+    .container { max-width:1440px; margin:0 auto; }
+    .header {
+      display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap;
+      gap:16px; padding:16px 24px;
+      background:var(--bg-card); backdrop-filter:blur(20px);
+      border:1px solid var(--border-color); border-radius:var(--radius);
+      margin-bottom:24px;
+    }
+    .header-left { display:flex; align-items:center; gap:16px; flex-wrap:wrap; }
+    .logo { display:flex; align-items:center; gap:12px; }
+    .logo-icon {
+      width:44px; height:44px;
+      background:linear-gradient(135deg, var(--accent-blue), var(--accent-purple));
+      border-radius:14px; display:flex; align-items:center; justify-content:center;
+      font-size:1.4rem; box-shadow:0 4px 15px rgba(59,130,246,0.3);
+    }
+    .logo h1 {
+      font-size:1.6rem; font-weight:700;
+      background:linear-gradient(135deg, #f1f5f9 0%, #94a3b8 100%);
+      -webkit-background-clip:text; -webkit-text-fill-color:transparent;
+      background-clip:text; letter-spacing:-0.5px;
+    }
+    .header-right { display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
+    .status-badge {
+      display:flex; align-items:center; gap:10px;
+      padding:8px 20px; border-radius:40px; font-weight:600; font-size:0.9rem;
+      background:rgba(34,197,94,0.15); color:var(--accent-green);
+      border:1px solid rgba(34,197,94,0.2);
+      transition:var(--transition);
+    }
+    .status-badge .dot {
+      width:10px; height:10px; border-radius:50%;
+      background:var(--accent-green);
+      animation:pulse-dot 2s infinite;
+    }
+    .status-badge.bahaya {
+      background:rgba(239,68,68,0.15); color:var(--accent-red);
+      border-color:rgba(239,68,68,0.2);
+    }
+    .status-badge.bahaya .dot { background:var(--accent-red); animation:pulse-dot-danger 0.8s infinite; }
+    @keyframes pulse-dot { 0%,100%{opacity:1;transform:scale(1);} 50%{opacity:0.5;transform:scale(0.8);} }
+    @keyframes pulse-dot-danger { 0%,100%{opacity:1;transform:scale(1);} 50%{opacity:0.3;transform:scale(0.6);} }
+    .btn {
+      padding:8px 18px; border-radius:12px; border:none; font-size:0.85rem;
+      font-weight:600; cursor:pointer; transition:var(--transition);
+      display:inline-flex; align-items:center; gap:8px;
+      background:var(--bg-secondary); color:var(--text-secondary);
+      border:1px solid var(--border-color);
+    }
+    .btn:hover { background:rgba(255,255,255,0.08); color:var(--text-primary); transform:translateY(-1px); }
+    .btn-telegram { background:#0088cc; color:white; border:none; }
+    .btn-telegram:hover { background:#0077b3; box-shadow:0 4px 20px rgba(0,136,204,0.3); }
+    .btn-danger { background:rgba(239,68,68,0.15); color:var(--accent-red); border:1px solid rgba(239,68,68,0.2); }
+    .btn-danger:hover { background:rgba(239,68,68,0.25); }
+    .filter-group { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+    .filter-group input, .filter-group select {
+      padding:8px 14px; border-radius:12px; border:1px solid var(--border-color);
+      background:var(--bg-secondary); color:var(--text-primary); font-size:0.85rem;
+      outline:none; transition:var(--transition);
+    }
+    .filter-group input:focus, .filter-group select:focus {
+      border-color:var(--accent-blue); box-shadow:0 0 0 3px rgba(59,130,246,0.15);
+    }
+    .filter-group input::placeholder { color:var(--text-muted); }
+    .card {
+      background:var(--bg-card); backdrop-filter:blur(12px);
+      border:1px solid var(--border-color); border-radius:var(--radius);
+      padding:24px; transition:var(--transition); margin-bottom:20px;
+    }
+    .card:hover { border-color:rgba(255,255,255,0.08); }
+    .card-title {
+      font-size:1.1rem; font-weight:600; margin-bottom:16px;
+      display:flex; align-items:center; gap:10px; color:var(--text-secondary);
+    }
+    .stream-wrapper {
+      position:relative; border-radius:16px; overflow:hidden; background:#000;
+    }
+    .stream-wrapper img {
+      width:100%; max-height:65vh; object-fit:contain; display:block;
+    }
+    .stream-overlay {
+      position:absolute; bottom:16px; left:16px;
+      background:rgba(0,0,0,0.6); backdrop-filter:blur(8px);
+      padding:6px 14px; border-radius:30px; font-size:0.75rem;
+      color:var(--text-secondary); display:flex; align-items:center; gap:8px;
+      border:1px solid rgba(255,255,255,0.05);
+    }
+    .stream-overlay .live-dot {
+      width:8px; height:8px; border-radius:50%; background:var(--accent-red);
+      animation:pulse-dot-danger 1s infinite;
+    }
+    .snapshot-grid { display:grid; grid-template-columns:1.5fr 1fr; gap:24px; }
+    .main-snapshot {
+      background:var(--bg-card); border-radius:var(--radius); padding:20px;
+      border:1px solid var(--border-color);
+    }
+    .main-snapshot .main-img {
+      width:100%; border-radius:14px; max-height:420px; object-fit:contain;
+      background:var(--bg-secondary);
+    }
+    .main-snapshot .meta {
+      margin-top:14px; padding:12px 16px; background:var(--bg-secondary);
+      border-radius:12px; font-size:0.9rem; color:var(--text-secondary);
+      display:flex; flex-wrap:wrap; gap:12px 20px;
+    }
+    .main-snapshot .meta .label { color:var(--text-muted); font-weight:500; }
+    .main-snapshot .meta .value { color:var(--text-primary); font-weight:600; }
+    .gallery-panel {
+      background:var(--bg-card); border-radius:var(--radius); padding:20px;
+      border:1px solid var(--border-color);
+    }
+    .gallery-grid {
+      display:grid; grid-template-columns:repeat(auto-fill, minmax(90px,1fr));
+      gap:12px; max-height:500px; overflow-y:auto; padding-right:4px;
+    }
+    .gallery-item {
+      aspect-ratio:1/1; border-radius:14px; overflow:hidden; cursor:pointer;
+      border:2px solid transparent; transition:var(--transition);
+      position:relative; background:var(--bg-secondary);
+    }
+    .gallery-item:hover { border-color:var(--accent-blue); transform:scale(1.04); z-index:2; }
+    .gallery-item img { width:100%; height:100%; object-fit:cover; }
+    .gallery-item .badge-trigger {
+      position:absolute; bottom:4px; right:4px;
+      padding:2px 8px; border-radius:20px; font-size:0.6rem; font-weight:700;
+      backdrop-filter:blur(8px); background:rgba(0,0,0,0.6); color:white;
+    }
+    .gallery-item .badge-trigger.pir { background:rgba(239,68,68,0.8); }
+    .empty-message {
+      text-align:center; padding:40px 20px; color:var(--text-muted); font-size:0.9rem;
+    }
+    .empty-message i { font-size:2.5rem; margin-bottom:12px; opacity:0.3; }
+    .toast {
+      position:fixed; bottom:30px; right:30px; padding:14px 24px;
+      border-radius:16px; background:var(--bg-secondary); backdrop-filter:blur(20px);
+      border:1px solid var(--border-color); color:var(--text-primary);
+      font-weight:500; box-shadow:0 20px 60px rgba(0,0,0,0.4);
+      opacity:0; transform:translateY(20px);
+      transition:all 0.4s cubic-bezier(0.4,0,0.2,1); z-index:1000;
+      pointer-events:none; max-width:90%;
+    }
+    .toast.show { opacity:1; transform:translateY(0); }
+    .toast.success { border-left:4px solid var(--accent-green); }
+    .toast.error { border-left:4px solid var(--accent-red); }
+    .toast.warning { border-left:4px solid var(--accent-yellow); }
+    .footer {
+      text-align:center; padding:20px 0; color:var(--text-muted);
+      font-size:0.8rem; border-top:1px solid var(--border-color); margin-top:20px;
+    }
+    @media (max-width:1024px) { .snapshot-grid { grid-template-columns:1fr; } }
+    @media (max-width:768px) {
+      body { padding:12px; }
+      .header { flex-direction:column; align-items:stretch; padding:16px; }
+      .header-left { flex-wrap:wrap; }
+      .header-right { flex-wrap:wrap; }
+      .logo h1 { font-size:1.2rem; }
+      .filter-group input, .filter-group select { width:100%; }
+      .btn { padding:8px 14px; font-size:0.8rem; }
+      .card { padding:16px; }
+      .gallery-grid { grid-template-columns:repeat(auto-fill,minmax(70px,1fr)); }
+      .toast { bottom:16px; right:16px; left:16px; max-width:100%; }
+    }
+  </style>
+</head>
+<body>
+<div class="container">
+
+  <header class="header">
+    <div class="header-left">
+      <div class="logo">
+        <div class="logo-icon">🛡️</div>
+        <h1>Security Monitor</h1>
+      </div>
+      <div id="statusBadge" class="status-badge">
+        <span class="dot"></span>
+        <span id="statusText">Aman</span>
+      </div>
+    </div>
+    <div class="header-right">
+      <div class="filter-group">
+        <input type="text" id="filterDevice" placeholder="Filter Device" />
+        <select id="filterTrigger">
+          <option value="all">Semua Trigger</option>
+          <option value="pir">🔴 PIR</option>
+        </select>
+      </div>
+      <button id="refreshBtn" class="btn">🔄 Refresh</button>
+      <button id="testTelegramBtn" class="btn btn-telegram">📨 Test Telegram</button>
+      <button id="clearGalleryBtn" class="btn btn-danger">🗑 Clear</button>
+    </div>
+  </header>
+
+  <!-- Live Stream -->
+  <div class="card">
+    <div class="card-title"><i>📹</i> Live Stream (ESP32-CAM)</div>
+    <div class="stream-wrapper">
+      <img id="liveCam" src="http://10.117.198.249:81/stream" alt="Live Stream" />
+      <div class="stream-overlay">
+        <span class="live-dot"></span><span>LIVE</span>
+        <span style="opacity:0.4;">|</span>
+        <span id="streamStatus">MJPEG</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Snapshot & Gallery -->
+  <div class="snapshot-grid">
+    <div class="main-snapshot">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
+        <span class="card-title" style="margin-bottom:0;"><i>📸</i> Snapshot Terbaru</span>
+        <span id="snapshotCount" style="font-size:0.8rem; color:var(--text-muted);">0 total</span>
+      </div>
+      <img id="mainImage" class="main-img" src="" alt="Belum ada snapshot" />
+      <div id="mainMeta" class="meta">
+        <span><span class="label">Menunggu data...</span></span>
+      </div>
+    </div>
+
+    <div class="gallery-panel">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
+        <span class="card-title" style="margin-bottom:0;"><i>🖼️</i> Galeri History</span>
+        <span id="galleryCount" style="font-size:0.8rem; color:var(--text-muted);">0</span>
+      </div>
+      <div id="gallery" class="gallery-grid">
+        <div class="empty-message">
+          <div style="font-size:2.5rem; opacity:0.3;">🖼️</div>
+          Belum ada snapshot
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="footer">
+    🔔 Data realtime dari Firebase &nbsp;|&nbsp; Notifikasi Telegram otomatis untuk trigger PIR
+  </div>
+</div>
+
+<div id="toast" class="toast">Notifikasi</div>
+
+<script type="module">
+  // ================================================================
+  // 1. IMPORTS (Hanya Database, TANPA Storage)
+  // ================================================================
+  import { initializeApp } from "firebase/app";
+  import { getDatabase, ref, onValue, get } from "firebase/database";
+
+  // ================================================================
+  // 2. KONFIGURASI FIREBASE
+  // ================================================================
+  const firebaseConfig = {
+    apiKey: "AIzaSyAiJ5l6sUwZ-OQrHHTh3RZwIYBtVfE8RaU",
+    authDomain: "camera-7dd22.firebaseapp.com",
+    databaseURL: "https://camera-7dd22-default-rtdb.firebaseio.com",
+    projectId: "camera-7dd22",
+    storageBucket: "camera-7dd22.firebasestorage.app",
+    messagingSenderId: "14387554055",
+    appId: "1:14387554055:web:531982869c4cda4bde87a2"
+  };
+
+  // ================================================================
+  // 3. CLOUDFLARE WORKER (Telegram)
+  // ================================================================
+  const CLOUDFLARE_WORKER_URL = "https://red-boat-9dbb.mrizky17013.workers.dev";
+  const TELEGRAM_BOT_TOKEN = "8539832294:AAFhCE40-uTetE0TCpCfKxfz8BCvCnLtMGs";
+  const TELEGRAM_CHAT_ID = "1379836372";
+
+  // ================================================================
+  // 4. INISIALISASI FIREBASE
+  // ================================================================
+  let app, database;
+  try {
+    app = initializeApp(firebaseConfig);
+    database = getDatabase(app);
+    console.log('✅ Firebase initialized');
+  } catch (err) {
+    console.error('❌ Gagal inisialisasi Firebase:', err);
+    document.getElementById('toast').textContent = '❌ Gagal konek Firebase';
+    document.getElementById('toast').className = 'toast error show';
+  }
+
+  // ================================================================
+  // 5. DOM ELEMENTS
+  // ================================================================
+  const els = {
+    statusBadge: document.getElementById('statusBadge'),
+    statusText: document.getElementById('statusText'),
+    liveCam: document.getElementById('liveCam'),
+    mainImg: document.getElementById('mainImage'),
+    mainMeta: document.getElementById('mainMeta'),
+    gallery: document.getElementById('gallery'),
+    snapshotCount: document.getElementById('snapshotCount'),
+    galleryCount: document.getElementById('galleryCount'),
+    filterDevice: document.getElementById('filterDevice'),
+    filterTrigger: document.getElementById('filterTrigger'),
+    refreshBtn: document.getElementById('refreshBtn'),
+    clearGalleryBtn: document.getElementById('clearGalleryBtn'),
+    testTelegramBtn: document.getElementById('testTelegramBtn'),
+    toast: document.getElementById('toast'),
+    streamStatus: document.getElementById('streamStatus')
+  };
+
+  let allSnapshots = [];
+  let currentMainTimestamp = 0;
+  let lastNotifiedTimestamp = 0;
+
+  // ===== CACHE GAMBAR (untuk fallback imagePath) =====
+  const imageCache = new Map();
+
+  // ================================================================
+  // 6. UTILITY
+  // ================================================================
+  function showToast(msg, type = 'success') {
+    if (!els.toast) return;
+    els.toast.textContent = msg;
+    els.toast.className = `toast ${type} show`;
+    clearTimeout(els.toast._timeout);
+    els.toast._timeout = setTimeout(() => els.toast.classList.remove('show'), 4000);
+  }
+
+  async function sendTelegramNotification(message) {
+    try {
+      const url = `${CLOUDFLARE_WORKER_URL}/bot${TELEGRAM_BOT_TOKEN}/sendMessage`;
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          chat_id: TELEGRAM_CHAT_ID,
+          text: message,
+          parse_mode: 'HTML',
+          disable_web_page_preview: false
+        })
+      });
+      if (res.ok) {
+        showToast('✅ Notifikasi Telegram terkirim!', 'success');
+        return true;
+      } else {
+        showToast('❌ Gagal kirim notifikasi', 'error');
+        return false;
+      }
+    } catch (e) {
+      showToast('❌ Error koneksi ke proxy', 'error');
+      return false;
+    }
+  }
+
+  function formatTime(ts) {
+    if (!ts) return '-';
+    return new Date(ts * 1000).toLocaleString('id-ID', {
+      day: '2-digit', month: 'short', year: 'numeric',
+      hour: '2-digit', minute: '2-digit', second: '2-digit'
+    });
+  }
+
+  function getTriggerLabel(type) {
+    const map = { pir: '🔴 PIR', manual: '🔵 Manual', schedule: '🟢 Schedule' };
+    return map[type] || '⚪ Unknown';
+  }
+
+  function getTriggerClass(type) {
+    const map = { pir: 'pir', manual: 'manual', schedule: 'schedule' };
+    return map[type] || '';
+  }
+
+  function updateStatusUI(isMotion) {
+    const isBahaya = isMotion === true;
+    els.statusBadge.className = `status-badge ${isBahaya ? 'bahaya' : ''}`;
+    els.statusText.textContent = isBahaya ? '⚠️ Bahaya!' : '🟢 Aman';
+  }
+
+  function setMainImage(imageUrl, deviceId, timestamp, triggerType, distance = null) {
+    if (!imageUrl) {
+      els.mainImg.src = '';
+      els.mainImg.alt = 'Foto tidak tersedia';
+      els.mainMeta.innerHTML = '<span class="label" style="color:var(--accent-yellow);">⚠️ Gambar tidak ditemukan</span>';
+      return;
+    }
+    // Tambahkan timestamp untuk menghindari cache browser
+    const url = imageUrl + (imageUrl.includes('?') ? '&' : '?') + '_=' + Date.now();
+    els.mainImg.src = url;
+    let metaHtml = `
+      <span><span class="label">Device:</span> <span class="value">${deviceId || 'ESP32-CAM'}</span></span>
+      <span><span class="label">Waktu:</span> <span class="value">${formatTime(timestamp)}</span></span>
+      <span><span class="label">Trigger:</span> <span class="value">${getTriggerLabel(triggerType)}</span></span>
+    `;
+    if (distance !== null && distance !== undefined) {
+      metaHtml += `<span><span class="label">📏 Jarak:</span> <span class="value">${distance} m</span></span>`;
+    }
+    els.mainMeta.innerHTML = metaHtml;
+    currentMainTimestamp = timestamp;
+  }
+
+  function renderGallery(snapshots) {
+    els.gallery.innerHTML = '';
+    if (!snapshots.length) {
+      els.gallery.innerHTML = `<div class="empty-message"><div style="font-size:2.5rem; opacity:0.3;">🖼️</div>Belum ada snapshot</div>`;
+      els.galleryCount.textContent = '0';
+      return;
+    }
+    snapshots.forEach(item => {
+      const el = document.createElement('div');
+      el.className = 'gallery-item';
+      // Jika imageUrl kosong, tampilkan placeholder
+      const imgSrc = item.imageUrl || 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100"%3E%3Crect width="100" height="100" fill="%23333"/%3E%3Ctext x="50" y="50" font-family="Arial" font-size="12" fill="%23666" text-anchor="middle" dy=".3em"%3ENo Image%3C/text%3E%3C/svg%3E';
+      el.innerHTML = `
+        <img src="${imgSrc}" loading="lazy" alt="snapshot" />
+        <span class="badge-trigger ${getTriggerClass(item.triggerType)}">${getTriggerLabel(item.triggerType)}</span>
+      `;
+      el.title = `${item.deviceId} - ${formatTime(item.timestamp)}`;
+      el.addEventListener('click', () => {
+        setMainImage(item.imageUrl, item.deviceId, item.timestamp, item.triggerType, item.distance);
+        showToast(`Menampilkan snapshot dari ${item.deviceId}`, 'success');
+      });
+      els.gallery.appendChild(el);
+    });
+    els.galleryCount.textContent = snapshots.length;
+  }
+
+  function filterAndRender() {
+    const filterText = els.filterDevice.value.trim().toLowerCase();
+    const triggerFilter = els.filterTrigger.value;
+    let filtered = [...allSnapshots];
+    if (filterText) {
+      filtered = filtered.filter(s => s.deviceId && s.deviceId.toLowerCase().includes(filterText));
+    }
+    if (triggerFilter !== 'all') {
+      filtered = filtered.filter(s => s.triggerType === triggerFilter);
+    }
+    renderGallery(filtered);
+    els.snapshotCount.textContent = allSnapshots.length;
+  }
+
+  // ================================================================
+  // 7. AMBIL GAMBAR (PRIORITASKAN imageUrl DARI DATABASE)
+  // ================================================================
+  async function getImageUrlFromDatabase(item) {
+    // 1. Jika ada imageUrl, langsung gunakan
+    if (item.imageUrl && typeof item.imageUrl === 'string' && item.imageUrl.startsWith('http')) {
+      return item.imageUrl;
+    }
+    // 2. Jika ada imagePath, buat URL dengan HEAD request (fallback)
+    if (item.imagePath) {
+      const path = item.imagePath;
+      if (imageCache.has(path)) {
+        const cached = imageCache.get(path);
+        return cached === null ? null : cached;
+      }
+      try {
+        const cleanPath = path.startsWith('/') ? path.substring(1) : path;
+        const storagePath = cleanPath.startsWith('capture/') ? cleanPath : `capture/${cleanPath}`;
+        const encodedPath = encodeURIComponent(storagePath);
+        const url = `https://firebasestorage.googleapis.com/v0/b/${firebaseConfig.storageBucket}/o/${encodedPath}?alt=media`;
+        const response = await fetch(url, { method: 'HEAD' });
+        if (response.ok) {
+          imageCache.set(path, url);
+          return url;
+        } else {
+          imageCache.set(path, null);
+          return null;
+        }
+      } catch (error) {
+        imageCache.set(path, null);
+        return null;
+      }
+    }
+    return null;
+  }
+
+  // ================================================================
+  // 8. LISTENER: STATUS PIR
+  // ================================================================
+  if (database) {
+    const pirRef = ref(database, 'pir');
+    onValue(pirRef, (snap) => {
+      try {
+        const data = snap.val();
+        if (data && data.motion !== undefined) {
+          updateStatusUI(data.motion === true);
+        } else {
+          updateStatusUI(false);
+        }
+      } catch (err) {
+        console.error('Error PIR listener:', err);
+      }
+    }, (error) => {
+      console.error('Error PIR:', error);
+      showToast('❌ Gagal membaca status PIR', 'error');
+    });
+  }
+
+  // ================================================================
+  // 9. LISTENER: HISTORY (GALERI) - MENGGUNAKAN imageUrl
+  // ================================================================
+  if (database) {
+    const historyRef = ref(database, 'history');
+    onValue(historyRef, async (snap) => {
+      try {
+        const data = snap.val();
+        if (!data) {
+          allSnapshots = [];
+          filterAndRender();
+          els.mainMeta.innerHTML = '<span class="label">Belum ada history.</span>';
+          return;
+        }
+
+        const entries = Object.values(data);
+        if (!entries.length) {
+          allSnapshots = [];
+          filterAndRender();
+          els.mainMeta.innerHTML = '<span class="label">Belum ada history.</span>';
+          return;
+        }
+
+        const processed = [];
+        for (const item of entries) {
+          if (!item) continue;
+          // Ambil URL gambar (prioritaskan imageUrl)
+          const imageUrl = await getImageUrlFromDatabase(item);
+          processed.push({
+            imageUrl: imageUrl || '',
+            deviceId: item.deviceId || 'ESP32-CAM',
+            timestamp: item.timestamp || Math.floor(Date.now() / 1000),
+            triggerType: 'pir',
+            distance: item.distance || null
+          });
+        }
+
+        processed.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+        allSnapshots = processed;
+        filterAndRender();
+
+        const latest = processed[0];
+        if (latest) {
+          setMainImage(latest.imageUrl, latest.deviceId, latest.timestamp, latest.triggerType, latest.distance);
+        } else {
+          els.mainImg.src = '';
+          els.mainMeta.innerHTML = '<span class="label">Belum ada data.</span>';
+        }
+      } catch (err) {
+        console.error('Error history listener:', err);
+        showToast('❌ Gagal memuat history', 'error');
+      }
+    }, (error) => {
+      console.error('Error history:', error);
+      showToast('❌ Gagal membaca history', 'error');
+    });
+  }
+
+  // ================================================================
+  // 10. LISTENER: MOTION UNTUK NOTIFIKASI
+  // ================================================================
+  if (database) {
+    const motionRef = ref(database, 'pir/motion');
+    onValue(motionRef, async (snap) => {
+      try {
+        const motion = snap.val();
+        if (motion === true) {
+          const historySnap = await get(ref(database, 'history'));
+          const data = historySnap.val();
+          if (data) {
+            const entries = Object.values(data);
+            entries.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+            const latest = entries[0];
+            if (latest && latest.timestamp > lastNotifiedTimestamp) {
+              const dashboardUrl = window.location.href;
+              const msg = `<b>🚨 PERINGATAN KEAMANAN!</b>\n` +
+                `Sensor PIR mendeteksi gerakan pada ${formatTime(latest.timestamp)}\n` +
+                `🆔 Device: ${latest.deviceId || 'ESP32-CAM'}\n\n` +
+                `🔗 <a href="${dashboardUrl}">Lihat Dashboard</a>`;
+              sendTelegramNotification(msg);
+              lastNotifiedTimestamp = latest.timestamp;
+            }
+          }
+        }
+      } catch (err) {
+        console.error('Error motion listener:', err);
+      }
+    }, (error) => {
+      console.error('Error motion:', error);
+    });
+  }
+
+  // ================================================================
+  // 11. EVENT LISTENERS
+  // ================================================================
+  els.filterDevice.addEventListener('input', filterAndRender);
+  els.filterTrigger.addEventListener('change', filterAndRender);
+  els.refreshBtn.addEventListener('click', () => showToast('🔄 Data disegarkan', 'success'));
+  els.clearGalleryBtn.addEventListener('click', () => {
+    els.gallery.innerHTML = `<div class="empty-message"><div style="font-size:2.5rem; opacity:0.3;">🧹</div>Tampilan dibersihkan</div>`;
+    showToast('Galeri visual dikosongkan', 'warning');
+  });
+  els.testTelegramBtn.addEventListener('click', async () => {
+    await sendTelegramNotification('🔧 <b>Test Notifikasi</b>\nDashboard berjalan normal ✅');
+  });
+
+  // ================================================================
+  // 12. LIVE STREAM AUTO-RETRY
+  // ================================================================
+  const streamUrl = "http://10.117.198.249:81/stream";
+  let streamRetryCount = 0;
+  function loadStream() {
+    els.liveCam.src = streamUrl + '?t=' + Date.now();
+  }
+  els.liveCam.onerror = function() {
+    console.warn('⚠️ Stream error, reloading...');
+    streamRetryCount++;
+    if (streamRetryCount < 10) setTimeout(loadStream, 3000);
+    else els.streamStatus.textContent = 'Offline';
+  };
+  let streamTimeout;
+  els.liveCam.onloadstart = function() {
+    streamTimeout = setTimeout(() => {
+      console.warn('⏳ Stream timeout, reloading...');
+      loadStream();
+    }, 10000);
+  };
+  els.liveCam.onload = function() {
+    clearTimeout(streamTimeout);
+    streamRetryCount = 0;
+    els.streamStatus.textContent = 'MJPEG';
+  };
+  loadStream();
+
+  showToast('✅ Terhubung ke Firebase', 'success');
+  console.log('🛡️ Security Monitor Pro siap! (menggunakan imageUrl)');
+</script>
+</body>
+</html>
