@@ -284,7 +284,7 @@
 
 <script type="module">
   // ================================================================
-  // 1. IMPORTS (Hanya Database, TANPA Storage)
+  // 1. IMPORTS
   // ================================================================
   import { initializeApp } from "firebase/app";
   import { getDatabase, ref, onValue, get } from "firebase/database";
@@ -324,7 +324,7 @@
   }
 
   // ================================================================
-  // 5. DOM ELEMENTS
+  // 5. DOM ELEMENTS & GLOBAL VARIABLES
   // ================================================================
   const els = {
     statusBadge: document.getElementById('statusBadge'),
@@ -344,15 +344,16 @@
     streamStatus: document.getElementById('streamStatus')
   };
 
+  // ===== LINK PUBLIK UNTUK DASHBOARD =====
+  const DASHBOARD_URL = "https://rizlast.github.io/sistem_keamanan_berbasis-monitoring/";
+
   let allSnapshots = [];
   let currentMainTimestamp = 0;
   let lastNotifiedTimestamp = 0;
-
-  // ===== CACHE GAMBAR (untuk fallback imagePath) =====
   const imageCache = new Map();
 
   // ================================================================
-  // 6. UTILITY
+  // 6. UTILITY FUNCTIONS
   // ================================================================
   function showToast(msg, type = 'success') {
     if (!els.toast) return;
@@ -364,13 +365,18 @@
 
   async function sendTelegramNotification(message) {
     try {
+      // Pastikan pesan sudah berisi link, jika belum tambahkan
+      let finalMessage = message;
+      if (!message.includes('Lihat Dashboard')) {
+        finalMessage += `\n\n🔗 <a href="${DASHBOARD_URL}">Lihat Dashboard</a>`;
+      }
       const url = `${CLOUDFLARE_WORKER_URL}/bot${TELEGRAM_BOT_TOKEN}/sendMessage`;
       const res = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           chat_id: TELEGRAM_CHAT_ID,
-          text: message,
+          text: finalMessage,
           parse_mode: 'HTML',
           disable_web_page_preview: false
         })
@@ -419,7 +425,6 @@
       els.mainMeta.innerHTML = '<span class="label" style="color:var(--accent-yellow);">⚠️ Gambar tidak ditemukan</span>';
       return;
     }
-    // Tambahkan timestamp untuk menghindari cache browser
     const url = imageUrl + (imageUrl.includes('?') ? '&' : '?') + '_=' + Date.now();
     els.mainImg.src = url;
     let metaHtml = `
@@ -444,7 +449,6 @@
     snapshots.forEach(item => {
       const el = document.createElement('div');
       el.className = 'gallery-item';
-      // Jika imageUrl kosong, tampilkan placeholder
       const imgSrc = item.imageUrl || 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100"%3E%3Crect width="100" height="100" fill="%23333"/%3E%3Ctext x="50" y="50" font-family="Arial" font-size="12" fill="%23666" text-anchor="middle" dy=".3em"%3ENo Image%3C/text%3E%3C/svg%3E';
       el.innerHTML = `
         <img src="${imgSrc}" loading="lazy" alt="snapshot" />
@@ -478,11 +482,9 @@
   // 7. AMBIL GAMBAR (PRIORITASKAN imageUrl DARI DATABASE)
   // ================================================================
   async function getImageUrlFromDatabase(item) {
-    // 1. Jika ada imageUrl, langsung gunakan
     if (item.imageUrl && typeof item.imageUrl === 'string' && item.imageUrl.startsWith('http')) {
       return item.imageUrl;
     }
-    // 2. Jika ada imagePath, buat URL dengan HEAD request (fallback)
     if (item.imagePath) {
       const path = item.imagePath;
       if (imageCache.has(path)) {
@@ -533,7 +535,7 @@
   }
 
   // ================================================================
-  // 9. LISTENER: HISTORY (GALERI) - MENGGUNAKAN imageUrl
+  // 9. LISTENER: HISTORY (GALERI)
   // ================================================================
   if (database) {
     const historyRef = ref(database, 'history');
@@ -558,7 +560,6 @@
         const processed = [];
         for (const item of entries) {
           if (!item) continue;
-          // Ambil URL gambar (prioritaskan imageUrl)
           const imageUrl = await getImageUrlFromDatabase(item);
           processed.push({
             imageUrl: imageUrl || '',
@@ -591,7 +592,7 @@
   }
 
   // ================================================================
-  // 10. LISTENER: MOTION UNTUK NOTIFIKASI
+  // 10. LISTENER: MOTION UNTUK NOTIFIKASI (DENGAN LINK PUBLIK)
   // ================================================================
   if (database) {
     const motionRef = ref(database, 'pir/motion');
@@ -606,11 +607,10 @@
             entries.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
             const latest = entries[0];
             if (latest && latest.timestamp > lastNotifiedTimestamp) {
-              const dashboardUrl = window.location.href;
               const msg = `<b>🚨 PERINGATAN KEAMANAN!</b>\n` +
                 `Sensor PIR mendeteksi gerakan pada ${formatTime(latest.timestamp)}\n` +
                 `🆔 Device: ${latest.deviceId || 'ESP32-CAM'}\n\n` +
-                `🔗 <a href="${dashboardUrl}">Lihat Dashboard</a>`;
+                `🔗 <a href="${DASHBOARD_URL}">Lihat Dashboard</a>`;
               sendTelegramNotification(msg);
               lastNotifiedTimestamp = latest.timestamp;
             }
@@ -635,7 +635,9 @@
     showToast('Galeri visual dikosongkan', 'warning');
   });
   els.testTelegramBtn.addEventListener('click', async () => {
-    await sendTelegramNotification('🔧 <b>Test Notifikasi</b>\nDashboard berjalan normal ✅');
+    // Kirim notifikasi test dengan link publik
+    const testMsg = `🔧 <b>Test Notifikasi</b>\nDashboard berjalan normal ✅\n\n🔗 <a href="${DASHBOARD_URL}">Lihat Dashboard</a>`;
+    await sendTelegramNotification(testMsg);
   });
 
   // ================================================================
@@ -667,7 +669,7 @@
   loadStream();
 
   showToast('✅ Terhubung ke Firebase', 'success');
-  console.log('🛡️ Security Monitor Pro siap! (menggunakan imageUrl)');
+  console.log(`🛡️ Security Monitor Pro siap! (Dashboard URL: ${DASHBOARD_URL})`);
 </script>
 </body>
 </html>
