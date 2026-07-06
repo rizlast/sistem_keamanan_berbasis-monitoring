@@ -625,20 +625,52 @@
   }
 
   // ================================================================
-  // 11. EVENT LISTENERS
-  // ================================================================
-  els.filterDevice.addEventListener('input', filterAndRender);
-  els.filterTrigger.addEventListener('change', filterAndRender);
-  els.refreshBtn.addEventListener('click', () => showToast('🔄 Data disegarkan', 'success'));
-  els.clearGalleryBtn.addEventListener('click', () => {
-    els.gallery.innerHTML = `<div class="empty-message"><div style="font-size:2.5rem; opacity:0.3;">🧹</div>Tampilan dibersihkan</div>`;
-    showToast('Galeri visual dikosongkan', 'warning');
-  });
-  els.testTelegramBtn.addEventListener('click', async () => {
-    // Kirim notifikasi test dengan link publik
-    const testMsg = `🔧 <b>Test Notifikasi</b>\nDashboard berjalan normal ✅\n\n🔗 <a href="${DASHBOARD_URL}">Lihat Dashboard</a>`;
-    await sendTelegramNotification(testMsg);
-  });
+// 11. EVENT LISTENERS
+// ================================================================
+els.filterDevice.addEventListener('input', filterAndRender);
+els.filterTrigger.addEventListener('change', filterAndRender);
+els.refreshBtn.addEventListener('click', () => showToast('🔄 Data disegarkan', 'success'));
+
+// === PERBAIKAN TOMBOL CLEAR ===
+els.clearGalleryBtn.addEventListener('click', async () => {
+  // Konfirmasi sebelum menghapus
+  const isConfirmed = confirm('⚠️ Yakin ingin menghapus SEMUA data snapshot dan history? Tindakan ini tidak bisa dibatalkan!');
+  if (!isConfirmed) return;
+
+  try {
+    showToast('⏳ Menghapus data...', 'warning');
+
+    // 1. Hapus semua data di /history
+    const historyRef = ref(database, 'history');
+    await set(historyRef, null); // atau remove(historyRef);
+
+    // 2. Reset data di /pir ke default
+    const pirRef = ref(database, 'pir');
+    await set(pirRef, {
+      motion: false,
+      status: 'clear',
+      lastPhotoPath: ''
+    });
+
+    // 3. Kosongkan array lokal dan render ulang
+    allSnapshots = [];
+    filterAndRender();
+    els.mainImg.src = '';
+    els.mainMeta.innerHTML = '<span class="label">Data telah dihapus.</span>';
+
+    showToast('✅ Semua data snapshot dan history berhasil dihapus!', 'success');
+  } catch (error) {
+    console.error('Gagal menghapus data:', error);
+    showToast('❌ Gagal menghapus data. Cek console.', 'error');
+  }
+});
+
+els.testTelegramBtn.addEventListener('click', async () => {
+  const testMsg = `🔧 <b>Test Notifikasi</b>\nDashboard berjalan normal ✅\n\n🔗 <a href="${DASHBOARD_URL}">Lihat Dashboard</a>`;
+  await sendTelegramNotification(testMsg);
+});
+
+// ... kode lainnya tetap sama
 
   // ================================================================
   // 12. LIVE STREAM AUTO-RETRY
