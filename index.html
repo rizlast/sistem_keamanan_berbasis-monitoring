@@ -8,7 +8,9 @@
     {
       "imports": {
         "firebase/app": "https://www.gstatic.com/firebasejs/11.6.0/firebase-app.js",
-        "firebase/database": "https://www.gstatic.com/firebasejs/11.6.0/firebase-database.js"
+        "firebase/database": "https://www.gstatic.com/firebasejs/11.6.0/firebase-database.js",
+        "firebase/storage": "https://www.gstatic.com/firebasejs/11.6.0/firebase-storage.js",
+        "firebase/auth": "https://www.gstatic.com/firebasejs/11.6.0/firebase-auth.js"
       }
     }
   </script>
@@ -239,7 +241,7 @@
   <div class="card">
     <div class="card-title"><i>📹</i> Live Stream (ESP32-CAM)</div>
     <div class="stream-wrapper">
-      <img id="liveCam" src="http://10.82.73.249:81/stream" alt="Live Stream" />
+      <img id="liveCam" src="http://10.117.198.249:81/stream" alt="Live Stream" />
       <div class="stream-overlay">
         <span class="live-dot"></span><span>LIVE</span>
         <span style="opacity:0.4;">|</span>
@@ -287,7 +289,9 @@
   // 1. IMPORTS
   // ================================================================
   import { initializeApp } from "firebase/app";
-  import { getDatabase, ref, onValue, get } from "firebase/database";
+  import { getDatabase, ref, onValue, get, set, remove } from "firebase/database";
+  import { getStorage, ref as storageRef, deleteObject, getDownloadURL } from "firebase/storage";
+  import { getAuth, signInWithEmailAndPassword } from "firebase/auth";
 
   // ================================================================
   // 2. KONFIGURASI FIREBASE
@@ -312,10 +316,12 @@
   // ================================================================
   // 4. INISIALISASI FIREBASE
   // ================================================================
-  let app, database;
+  let app, database, storage, auth;
   try {
     app = initializeApp(firebaseConfig);
     database = getDatabase(app);
+    storage = getStorage(app);
+    auth = getAuth(app);
     console.log('✅ Firebase initialized');
   } catch (err) {
     console.error('❌ Gagal inisialisasi Firebase:', err);
@@ -365,7 +371,6 @@
 
   async function sendTelegramNotification(message) {
     try {
-      // Pastikan pesan sudah berisi link, jika belum tambahkan
       let finalMessage = message;
       if (!message.includes('Lihat Dashboard')) {
         finalMessage += `\n\n🔗 <a href="${DASHBOARD_URL}">Lihat Dashboard</a>`;
@@ -592,7 +597,7 @@
   }
 
   // ================================================================
-  // 10. LISTENER: MOTION UNTUK NOTIFIKASI (DENGAN LINK PUBLIK)
+  // 10. LISTENER: MOTION UNTUK NOTIFIKASI
   // ================================================================
   if (database) {
     const motionRef = ref(database, 'pir/motion');
@@ -625,57 +630,116 @@
   }
 
   // ================================================================
-// 11. EVENT LISTENERS
-// ================================================================
-els.filterDevice.addEventListener('input', filterAndRender);
-els.filterTrigger.addEventListener('change', filterAndRender);
-els.refreshBtn.addEventListener('click', () => showToast('🔄 Data disegarkan', 'success'));
+  // 11. EVENT LISTENERS
+  // ================================================================
+  els.filterDevice.addEventListener('input', filterAndRender);
+  els.filterTrigger.addEventListener('change', filterAndRender);
+  els.refreshBtn.addEventListener('click', () => showToast('🔄 Data disegarkan', 'success'));
 
-// === PERBAIKAN TOMBOL CLEAR ===
-els.clearGalleryBtn.addEventListener('click', async () => {
-  // Konfirmasi sebelum menghapus
-  const isConfirmed = confirm('⚠️ Yakin ingin menghapus SEMUA data snapshot dan history? Tindakan ini tidak bisa dibatalkan!');
-  if (!isConfirmed) return;
+  // === FUNGSI CLEAR YANG DIPERBAIKI: HAPUS DATABASE & STORAGE ===
+  els.clearGalleryBtn.addEventListener('click', async () => {
+    const isConfirmed = confirm('⚠️ Yakin ingin menghapus SEMUA data snapshot dan history? Ini akan menghapus file gambar dari Storage dan data dari Database!');
+    if (!isConfirmed) return;
 
-  try {
-    showToast('⏳ Menghapus data...', 'warning');
+    try {
+      showToast('⏳ Memproses penghapusan...', 'warning');
 
-    // 1. Hapus semua data di /history
-    const historyRef = ref(database, 'history');
-    await set(historyRef, null); // atau remove(historyRef);
+      // 1. Login ke Firebase Auth (karena Arduino menggunakan auth, kita pakai yang sama)
+      const auth = getAuth();
+      await signInWithEmailAndPassword(auth, "mrizky17013@gmail.com", "Rizlast@1171");
+      console.log('✅ Auth berhasil');
 
-    // 2. Reset data di /pir ke default
-    const pirRef = ref(database, 'pir');
-    await set(pirRef, {
-      motion: false,
-      status: 'clear',
-      lastPhotoPath: ''
-    });
+      // 2. Ambil semua data history
+      const historySnap = await get(ref(database, 'history'));
+      const historyData = historySnap.val();
 
-    // 3. Kosongkan array lokal dan render ulang
-    allSnapshots = [];
-    filterAndRender();
-    els.mainImg.src = '';
-    els.mainMeta.innerHTML = '<span class="label">Data telah dihapus.</span>';
+      if (historyData) {
+        const entries = Object.entries(historyData);
+        let deletedCount = 0;
+        let failedCount = 0;
 
-    showToast('✅ Semua data snapshot dan history berhasil dihapus!', 'success');
-  } catch (error) {
-    console.error('Gagal menghapus data:', error);
-    showToast('❌ Gagal menghapus data. Cek console.', 'error');
-  }
-});
+        for (const [key, item] of entries) {
+          // Ambil imageUrl atau imagePath
+          let fileRef = null;
+          if (item.imageUrl) {
+            // Dari imageUrl, ekstrak path atau bisa langsung buat reference dari URL? lebih mudah pakai path
+            // Kita gunakan imagePath jika ada, atau kita bisa buat reference dari URL dengan cara decode
+            // Lebih baik gunakan imagePath
+            if (item.imagePath) {
+              const cleanPath = item.imagePath.startsWith('/') ? item.imagePath.substring(1) : item.imagePath;
+              fileRef = storageRef(storage, cleanPath);
+            } else {
+              // Coba ekstrak dari imageUrl
+              try {
+                const urlObj = new URL(item.imageUrl);
+                const pathname = urlObj.pathname; // misal /v0/b/.../o/capture%2F...
+                const match = pathname.match(/\/o\/(.*?)(?:\?|$)/);
+                if (match && match[1]) {
+                  const decodedPath = decodeURIComponent(match[1]);
+                  fileRef = storageRef(storage, decodedPath);
+                }
+              } catch (e) {
+                console.warn('Tidak bisa ekstrak path dari URL:', item.imageUrl);
+              }
+            }
+          } else if (item.imagePath) {
+            const cleanPath = item.imagePath.startsWith('/') ? item.imagePath.substring(1) : item.imagePath;
+            fileRef = storageRef(storage, cleanPath);
+          }
 
-els.testTelegramBtn.addEventListener('click', async () => {
-  const testMsg = `🔧 <b>Test Notifikasi</b>\nDashboard berjalan normal ✅\n\n🔗 <a href="${DASHBOARD_URL}">Lihat Dashboard</a>`;
-  await sendTelegramNotification(testMsg);
-});
+          if (fileRef) {
+            try {
+              await deleteObject(fileRef);
+              deletedCount++;
+              console.log(`🗑️ File dihapus: ${fileRef.fullPath}`);
+            } catch (err) {
+              if (err.code === 'storage/object-not-found') {
+                console.warn(`File tidak ditemukan: ${fileRef.fullPath}, lanjutkan.`);
+              } else {
+                console.error('Gagal hapus file:', err);
+                failedCount++;
+              }
+            }
+          }
+        }
 
-// ... kode lainnya tetap sama
+        console.log(`✅ ${deletedCount} file dihapus, ${failedCount} gagal.`);
+      }
+
+      // 3. Hapus semua data di /history
+      const historyRef = ref(database, 'history');
+      await set(historyRef, null);
+
+      // 4. Reset data di /pir ke default
+      const pirRef = ref(database, 'pir');
+      await set(pirRef, {
+        motion: false,
+        status: 'clear',
+        lastPhotoPath: ''
+      });
+
+      // 5. Kosongkan array lokal dan render ulang
+      allSnapshots = [];
+      filterAndRender();
+      els.mainImg.src = '';
+      els.mainMeta.innerHTML = '<span class="label">Data telah dihapus.</span>';
+
+      showToast(`✅ Data dan file gambar berhasil dihapus! (${deletedCount} file)`, 'success');
+    } catch (error) {
+      console.error('Gagal menghapus data:', error);
+      showToast(`❌ Gagal menghapus data: ${error.message}`, 'error');
+    }
+  });
+
+  els.testTelegramBtn.addEventListener('click', async () => {
+    const testMsg = `🔧 <b>Test Notifikasi</b>\nDashboard berjalan normal ✅\n\n🔗 <a href="${DASHBOARD_URL}">Lihat Dashboard</a>`;
+    await sendTelegramNotification(testMsg);
+  });
 
   // ================================================================
   // 12. LIVE STREAM AUTO-RETRY
   // ================================================================
-  const streamUrl = "http://10.82.73.249:81/stream";
+  const streamUrl = "http://10.117.198.249:81/stream";
   let streamRetryCount = 0;
   function loadStream() {
     els.liveCam.src = streamUrl + '?t=' + Date.now();
