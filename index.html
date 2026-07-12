@@ -423,6 +423,9 @@
     els.statusText.textContent = isBahaya ? '⚠️ Bahaya!' : '🟢 Aman';
   }
 
+  // ================================================================
+  // SET MAIN IMAGE (dengan dukungan jarak)
+  // ================================================================
   function setMainImage(imageUrl, deviceId, timestamp, triggerType, distance = null) {
     if (!imageUrl) {
       els.mainImg.src = '';
@@ -437,13 +440,16 @@
       <span><span class="label">Waktu:</span> <span class="value">${formatTime(timestamp)}</span></span>
       <span><span class="label">Trigger:</span> <span class="value">${getTriggerLabel(triggerType)}</span></span>
     `;
-    if (distance !== null && distance !== undefined) {
-      metaHtml += `<span><span class="label">📏 Jarak:</span> <span class="value">${distance} m</span></span>`;
+    if (distance !== null && distance !== undefined && !isNaN(distance)) {
+      metaHtml += `<span><span class="label">📏 Jarak:</span> <span class="value">${parseFloat(distance).toFixed(1)} m</span></span>`;
     }
     els.mainMeta.innerHTML = metaHtml;
     currentMainTimestamp = timestamp;
   }
 
+  // ================================================================
+  // RENDER GALLERY (dengan jarak di tooltip)
+  // ================================================================
   function renderGallery(snapshots) {
     els.gallery.innerHTML = '';
     if (!snapshots.length) {
@@ -459,7 +465,11 @@
         <img src="${imgSrc}" loading="lazy" alt="snapshot" />
         <span class="badge-trigger ${getTriggerClass(item.triggerType)}">${getTriggerLabel(item.triggerType)}</span>
       `;
-      el.title = `${item.deviceId} - ${formatTime(item.timestamp)}`;
+      // Tooltip dengan jarak jika ada
+      const distText = (item.distance !== null && item.distance !== undefined && !isNaN(item.distance))
+        ? ` - Jarak: ${parseFloat(item.distance).toFixed(1)} m`
+        : '';
+      el.title = `${item.deviceId} - ${formatTime(item.timestamp)}${distText}`;
       el.addEventListener('click', () => {
         setMainImage(item.imageUrl, item.deviceId, item.timestamp, item.triggerType, item.distance);
         showToast(`Menampilkan snapshot dari ${item.deviceId}`, 'success');
@@ -540,7 +550,7 @@
   }
 
   // ================================================================
-  // 9. LISTENER: HISTORY (GALERI)
+  // 9. LISTENER: HISTORY (GALERI) dengan jarak
   // ================================================================
   if (database) {
     const historyRef = ref(database, 'history');
@@ -566,12 +576,19 @@
         for (const item of entries) {
           if (!item) continue;
           const imageUrl = await getImageUrlFromDatabase(item);
+          // Ambil jarak dari berbagai kemungkinan field
+          let distance = item.distance ?? item.jarak ?? null;
+          if (distance !== null && !isNaN(parseFloat(distance))) {
+            distance = parseFloat(distance);
+          } else {
+            distance = null;
+          }
           processed.push({
             imageUrl: imageUrl || '',
             deviceId: item.deviceId || 'ESP32-CAM',
             timestamp: item.timestamp || Math.floor(Date.now() / 1000),
             triggerType: 'pir',
-            distance: item.distance || null
+            distance: distance
           });
         }
 
@@ -597,7 +614,7 @@
   }
 
   // ================================================================
-  // 10. LISTENER: MOTION UNTUK NOTIFIKASI
+  // 10. LISTENER: MOTION UNTUK NOTIFIKASI (dengan jarak)
   // ================================================================
   if (database) {
     const motionRef = ref(database, 'pir/motion');
@@ -612,9 +629,17 @@
             entries.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
             const latest = entries[0];
             if (latest && latest.timestamp > lastNotifiedTimestamp) {
+              // Ambil jarak dari latest
+              let distance = latest.distance ?? latest.jarak ?? null;
+              if (distance !== null && !isNaN(parseFloat(distance))) {
+                distance = parseFloat(distance);
+              } else {
+                distance = null;
+              }
+              const distText = (distance !== null) ? `\n📏 Jarak: ${distance.toFixed(1)} m` : '';
               const msg = `<b>🚨 PERINGATAN KEAMANAN!</b>\n` +
                 `Sensor PIR mendeteksi gerakan pada ${formatTime(latest.timestamp)}\n` +
-                `🆔 Device: ${latest.deviceId || 'ESP32-CAM'}\n\n` +
+                `🆔 Device: ${latest.deviceId || 'ESP32-CAM'}${distText}\n\n` +
                 `🔗 <a href="${DASHBOARD_URL}">Lihat Dashboard</a>`;
               sendTelegramNotification(msg);
               lastNotifiedTimestamp = latest.timestamp;
@@ -644,35 +669,28 @@
     try {
       showToast('⏳ Memproses penghapusan...', 'warning');
 
-      // 1. Login ke Firebase Auth (karena Arduino menggunakan auth, kita pakai yang sama)
       const auth = getAuth();
       await signInWithEmailAndPassword(auth, "mrizky17013@gmail.com", "Rizlast@1171");
       console.log('✅ Auth berhasil');
 
-      // 2. Ambil semua data history
       const historySnap = await get(ref(database, 'history'));
       const historyData = historySnap.val();
 
+      let deletedCount = 0;
+      let failedCount = 0;
+
       if (historyData) {
         const entries = Object.entries(historyData);
-        let deletedCount = 0;
-        let failedCount = 0;
-
         for (const [key, item] of entries) {
-          // Ambil imageUrl atau imagePath
           let fileRef = null;
           if (item.imageUrl) {
-            // Dari imageUrl, ekstrak path atau bisa langsung buat reference dari URL? lebih mudah pakai path
-            // Kita gunakan imagePath jika ada, atau kita bisa buat reference dari URL dengan cara decode
-            // Lebih baik gunakan imagePath
             if (item.imagePath) {
               const cleanPath = item.imagePath.startsWith('/') ? item.imagePath.substring(1) : item.imagePath;
               fileRef = storageRef(storage, cleanPath);
             } else {
-              // Coba ekstrak dari imageUrl
               try {
                 const urlObj = new URL(item.imageUrl);
-                const pathname = urlObj.pathname; // misal /v0/b/.../o/capture%2F...
+                const pathname = urlObj.pathname;
                 const match = pathname.match(/\/o\/(.*?)(?:\?|$)/);
                 if (match && match[1]) {
                   const decodedPath = decodeURIComponent(match[1]);
@@ -702,15 +720,12 @@
             }
           }
         }
-
         console.log(`✅ ${deletedCount} file dihapus, ${failedCount} gagal.`);
       }
 
-      // 3. Hapus semua data di /history
       const historyRef = ref(database, 'history');
       await set(historyRef, null);
 
-      // 4. Reset data di /pir ke default
       const pirRef = ref(database, 'pir');
       await set(pirRef, {
         motion: false,
@@ -718,7 +733,6 @@
         lastPhotoPath: ''
       });
 
-      // 5. Kosongkan array lokal dan render ulang
       allSnapshots = [];
       filterAndRender();
       els.mainImg.src = '';
