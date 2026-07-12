@@ -241,7 +241,7 @@
   <div class="card">
     <div class="card-title"><i>📹</i> Live Stream (ESP32-CAM)</div>
     <div class="stream-wrapper">
-      <img id="liveCam" src="http://10.117.198.249:81/stream" alt="Live Stream" />
+      <img id="liveCam" src="http://10.91.118.249:81/stream" alt="Live Stream" />
       <div class="stream-overlay">
         <span class="live-dot"></span><span>LIVE</span>
         <span style="opacity:0.4;">|</span>
@@ -739,7 +739,7 @@
   // ================================================================
   // 12. LIVE STREAM AUTO-RETRY
   // ================================================================
-  const streamUrl = "http://10.117.198.249:81/stream";
+  const streamUrl = "http://10.91.118.249:81/stream";
   let streamRetryCount = 0;
   function loadStream() {
     els.liveCam.src = streamUrl + '?t=' + Date.now();
